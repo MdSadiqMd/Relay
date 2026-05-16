@@ -1,0 +1,35 @@
+"""Configuration and settings for relay"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class RelayConfig(BaseSettings):
+    """Relay configuration — loaded from env vars with RELAY_ prefix."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="RELAY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Qdrant connection
+    qdrant_host: str = "localhost"
+    qdrant_port: int = 6333
+
+    # Embedding model
+    model_name: str = "all-MiniLM-L6-v2"
+    semantic_dim: int = 384
+
+    # Collection names
+    documents_collection: str = "relay_documents"
+    epochs_collection: str = "relay_epochs"
+    logs_collection: str = "relay_retrieval_logs"
+
+    # Defaults
+    default_tenant: str = "default"
+    default_retrieval_policy: str = "dense"
+    default_top_k: int = 5
+
+
+CONFIG = RelayConfig()
