@@ -2,6 +2,7 @@
 
 Commands:
     ingest    — Ingest a document into relay
+    epoch     — Epoch management (status, list)
 """
 
 import json
@@ -71,6 +72,78 @@ def ingest(
         border_style="green",
     )
     console.print(panel)
+
+
+@epoch_app.command("status")
+def epoch_status(
+    epoch: Optional[int] = typer.Option(None, "--epoch", help="Specific epoch ID"),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+):
+    """Show epoch status and details."""
+    from relay.collections import ensure_collections
+    from relay.epochs import get_epoch, list_epochs
+
+    client = ensure_collections()
+
+    if epoch is not None:
+        ep = get_epoch(client, tenant, epoch)
+        if ep is None:
+            console.print(f"[red]Epoch {epoch} not found for tenant {tenant}[/]")
+            raise typer.Exit(1)
+
+        if output_json:
+            console.print_json(ep.model_dump_json(indent=2))
+            return
+
+        panel = Panel(
+            f"  [cyan]epoch_id[/]:      {ep.epoch_id}\n"
+            f"  [cyan]created_at[/]:    {ep.created_at}\n"
+            f"  [cyan]model_version[/]: {ep.model_version}\n"
+            f"  [cyan]merkle_root[/]:   {ep.merkle_root[:24]}...\n"
+            f"  [cyan]doc_count[/]:     {ep.doc_count}\n"
+            f"  [cyan]parent_epoch[/]:  {ep.parent_epoch or '-'}\n"
+            f"  [cyan]tenant_id[/]:     {ep.tenant_id}",
+            title=f"[bold]Epoch {epoch}[/]",
+            border_style="blue",
+        )
+        console.print(panel)
+    else:
+        epochs = list_epochs(client, tenant)
+        if not epochs:
+            console.print(f"[dim]No epochs found for tenant '{tenant}'[/]")
+            return
+
+        if output_json:
+            data = [ep.model_dump() for ep in epochs]
+            console.print_json(json.dumps(data, indent=2, default=str))
+            return
+
+        table = Table(
+            title=f"Epochs for tenant '{tenant}'",
+            show_header=True,
+            header_style="bold blue",
+        )
+        table.add_column("ID", justify="right", width=5)
+        table.add_column("Created At", min_width=20)
+        table.add_column("Model", min_width=18)
+        table.add_column("Docs", justify="right", width=6)
+        table.add_column("Merkle Root", min_width=20)
+        table.add_column("Parent", justify="right", width=7)
+
+        for ep in epochs:
+            table.add_row(
+                str(ep.epoch_id),
+                ep.created_at,
+                ep.model_version,
+                str(ep.doc_count),
+                ep.merkle_root[:20] + "...",
+                str(ep.parent_epoch or "-"),
+            )
+
+        console.print(table)
 
 
 def main():
