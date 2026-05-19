@@ -2,6 +2,7 @@
 
 Commands:
     ingest    — Ingest a document into relay
+    supersede — Supersede one document with another
     query     — Temporal semantic query (--at, --epoch, latest)
     epoch     — Epoch management (status, list)
 """
@@ -71,6 +72,41 @@ def ingest(
         f"  [cyan]source[/]:        {result.source_file}",
         title="[bold]relay ingest[/]",
         border_style="green",
+    )
+    console.print(panel)
+
+
+@app.command()
+def supersede(
+    old_doc: str = typer.Option(
+        ..., "--old-doc", help="Old document (filename or doc_id)"
+    ),
+    new_doc: str = typer.Option(
+        ..., "--new-doc", help="New document (filename or doc_id)"
+    ),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+):
+    """Supersede an old document with a new one."""
+    from relay.supersede import supersede as do_supersede
+
+    with console.status("[bold yellow]Superseding document..."):
+        result = do_supersede(
+            old_doc_ref=old_doc,
+            new_doc_ref=new_doc,
+            tenant_id=tenant,
+        )
+
+    panel = Panel(
+        f"[bold yellow]⟳ Document superseded[/]\n\n"
+        f"  [cyan]old_doc[/]:     {result.old_doc_id}\n"
+        f"  [cyan]new_doc[/]:     {result.new_doc_id}\n"
+        f"  [cyan]old_valid_to[/]: {result.old_valid_to}\n"
+        f"  [cyan]new_epoch[/]:   {result.epoch.epoch_id}\n"
+        f"  [cyan]merkle_root[/]: {result.epoch.merkle_root[:16]}...",
+        title="[bold]relay supersede[/]",
+        border_style="yellow",
     )
     console.print(panel)
 
