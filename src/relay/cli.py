@@ -2,6 +2,7 @@
 
 Commands:
     ingest    — Ingest a document into relay
+    query     — Temporal semantic query (--at, --epoch, latest)
     epoch     — Epoch management (status, list)
 """
 
@@ -72,6 +73,87 @@ def ingest(
         border_style="green",
     )
     console.print(panel)
+
+
+@app.command()
+def query(
+    text: str = typer.Option(..., "--text", help="Query text"),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+    at: Optional[str] = typer.Option(
+        None, "--at", help="Retrieve as-of timestamp (YYYY-MM-DD)"
+    ),
+    epoch: Optional[int] = typer.Option(None, "--epoch", help="Pin to specific epoch"),
+    retrieval_policy: str = typer.Option(
+        "dense", "--retrieval-policy", help="Retrieval policy"
+    ),
+    top_k: int = typer.Option(5, "--top-k", "-k", help="Number of results"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+):
+    """Execute a temporal semantic query."""
+    from relay.query import query as do_query
+
+    with console.status("[bold blue]Querying semantic memory..."):
+        result = do_query(
+            text=text,
+            tenant_id=tenant,
+            at=at,
+            epoch_id=epoch,
+            retrieval_policy=retrieval_policy,
+            top_k=top_k,
+        )
+
+    if output_json:
+        console.print_json(result.model_dump_json(indent=2))
+        return
+
+    # Header
+    mode = "latest"
+    if at:
+        mode = f"as-of {at}"
+    elif epoch:
+        mode = f"epoch {epoch}"
+
+    console.print(f"\n[bold blue]relay query[/] — [dim]{mode}[/]")
+    console.print(f'  [cyan]query[/]: "{text}"')
+    console.print(
+        f"  [cyan]epoch[/]: {result.epoch_id}  [cyan]request_id[/]: {result.request_id[:12]}..."
+    )
+    console.print()
+
+    if not result.results:
+        console.print("[dim]No results found.[/]")
+        return
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("doc_id", min_width=20)
+    table.add_column("score", justify="right", width=8)
+    table.add_column("source", min_width=15)
+    table.add_column("valid_from", width=12)
+    table.add_column("valid_to", width=12)
+    table.add_column("status", width=12)
+
+    for i, r in enumerate(result.results, 1):
+        status = "[green]active[/]"
+        if r.superseded_by:
+            status = "[red]superseded[/]"
+        elif r.valid_to:
+            status = "[yellow]expired[/]"
+
+        table.add_row(
+            str(i),
+            r.doc_id,
+            f"{r.score:.4f}",
+            r.source_file or "-",
+            r.valid_from or "-",
+            r.valid_to or "-",
+            status,
+        )
+
+    console.print(table)
+    console.print(f"\n  [dim]{result.result_count} results returned[/]\n")
 
 
 @epoch_app.command("status")
