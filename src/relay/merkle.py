@@ -30,7 +30,7 @@ def compute_leaf(
         model_version,
         valid_from,
         valid_to or "",
-        ",".join(sorted(supersedes)),  # sorted for determinism
+        ",".join(sorted(supersedes or [])),  # sorted for determinism
     ]
     payload = "||".join(parts).encode("utf-8")
     return hashlib.sha256(payload).digest()

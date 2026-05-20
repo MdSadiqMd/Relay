@@ -24,7 +24,7 @@ class TestComputeLeaf:
 
     def test_supersedes_affects_hash(self):
         a = compute_leaf("d1", "ch", "eh", "v1", "2024-01-01", None, None)
-        b = compute_leaf("d1", "ch", "eh", "v1", "2024-01-01", None, "old_doc")
+        b = compute_leaf("d1", "ch", "eh", "v1", "2024-01-01", None, ["old_doc"])
         assert a != b
 
     def test_returns_bytes(self):

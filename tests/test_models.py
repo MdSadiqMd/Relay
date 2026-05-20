@@ -59,7 +59,7 @@ class TestDocumentPayload:
         )
         assert doc.doc_id == "test_001"
         assert doc.valid_to is None
-        assert doc.supersedes is None
+        assert doc.supersedes == []
         assert doc.superseded_by is None
         assert doc.semantic_tags == []
 
@@ -73,7 +73,7 @@ class TestDocumentPayload:
             valid_from="2024-01-01",
             valid_to="2025-01-01",
             epoch_id=1,
-            supersedes="old_doc",
+            supersedes=["old_doc"],
             created_at="2024-01-01T00:00:00Z",
             semantic_tags=["kafka", "streaming"],
             source_file="test.md",
@@ -151,7 +151,7 @@ class TestSupersedeResult:
             model_version="v1",
         )
         result = SupersedeResult(
-            old_doc_id="old",
+            old_doc_ids=["old"],
             new_doc_id="new",
             old_valid_to="2025-01-01",
             epoch=epoch,
@@ -219,10 +219,10 @@ class TestDiffResult:
     def test_supersession_info(self):
         sup = SupersessionInfo(
             doc_id="new_doc",
-            supersedes="old_doc",
+            supersedes=["old_doc"],
             source_file="nats.md",
         )
-        assert sup.supersedes == "old_doc"
+        assert sup.supersedes == ["old_doc"]
 
 
 class TestRetrievalLogPayload:
