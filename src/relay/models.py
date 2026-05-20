@@ -47,7 +47,7 @@ class DocumentPayload(BaseModel):
     valid_from: str
     valid_to: Optional[str] = None
     epoch_id: int
-    supersedes: Optional[str] = None
+    supersedes: list[str] = Field(default_factory=list)
     superseded_by: Optional[str] = None
     created_at: str
     semantic_tags: list[str] = Field(default_factory=list)
@@ -94,7 +94,7 @@ class IngestResult(BaseModel):
 class SupersedeResult(BaseModel):
     """Result returned from supersession."""
 
-    old_doc_id: str
+    old_doc_ids: list[str]
     new_doc_id: str
     old_valid_to: str
     epoch: EpochPayload
@@ -109,7 +109,7 @@ class QueryResultItem(BaseModel):
     content_hash: Optional[str] = None
     valid_from: Optional[str] = None
     valid_to: Optional[str] = None
-    supersedes: Optional[str] = None
+    supersedes: list[str] = Field(default_factory=list)
     superseded_by: Optional[str] = None
     semantic_tags: list[str] = Field(default_factory=list)
 
@@ -149,7 +149,7 @@ class SupersessionInfo(BaseModel):
     """A supersession relationship in a diff."""
 
     doc_id: str
-    supersedes: str
+    supersedes: list[str]
     source_file: Optional[str] = None
 
 

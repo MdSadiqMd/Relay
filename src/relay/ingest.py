@@ -19,7 +19,7 @@ def ingest_file(
     tenant_id: str,
     valid_from: str,
     valid_to: Optional[str] = None,
-    supersedes: Optional[str] = None,
+    supersedes: Optional[list[str]] = None,
     semantic_tags: Optional[list[str]] = None,
 ) -> IngestResult:
     """Ingest a file into relay.
@@ -74,7 +74,7 @@ def ingest_file(
         valid_from=valid_from,
         valid_to=valid_to,
         epoch_id=epoch_id,
-        supersedes=supersedes,
+        supersedes=supersedes or [],
         superseded_by=None,
         created_at=now,
         semantic_tags=semantic_tags or [],

@@ -40,8 +40,8 @@ def ingest(
     valid_to: Optional[str] = typer.Option(
         None, "--valid-to", help="Validity end date"
     ),
-    supersedes: Optional[str] = typer.Option(
-        None, "--supersedes", help="Doc ID this supersedes"
+    supersedes: Optional[list[str]] = typer.Option(
+        None, "--supersedes", help="Doc ID(s) this supersedes (repeatable)"
     ),
     tags: Optional[str] = typer.Option(
         None, "--tags", help="Comma-separated semantic tags"
@@ -78,8 +78,8 @@ def ingest(
 
 @app.command()
 def supersede(
-    old_doc: str = typer.Option(
-        ..., "--old-doc", help="Old document (filename or doc_id)"
+    old_doc: list[str] = typer.Option(
+        ..., "--old-doc", help="Old document(s) (filename or doc_id, repeatable)"
     ),
     new_doc: str = typer.Option(
         ..., "--new-doc", help="New document (filename or doc_id)"
@@ -88,19 +88,20 @@ def supersede(
         CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
     ),
 ):
-    """Supersede an old document with a new one."""
+    """Supersede one or more old documents with a new one."""
     from relay.supersede import supersede as do_supersede
 
     with console.status("[bold yellow]Superseding document..."):
         result = do_supersede(
-            old_doc_ref=old_doc,
+            old_doc_refs=old_doc,
             new_doc_ref=new_doc,
             tenant_id=tenant,
         )
 
+    old_ids = ", ".join(result.old_doc_ids)
     panel = Panel(
         f"[bold yellow]⟳ Document superseded[/]\n\n"
-        f"  [cyan]old_doc[/]:     {result.old_doc_id}\n"
+        f"  [cyan]old_docs[/]:    {old_ids}\n"
         f"  [cyan]new_doc[/]:     {result.new_doc_id}\n"
         f"  [cyan]old_valid_to[/]: {result.old_valid_to}\n"
         f"  [cyan]new_epoch[/]:   {result.epoch.epoch_id}\n"

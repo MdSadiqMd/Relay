@@ -12,7 +12,12 @@ from qdrant_client.models import (
 )
 
 from relay.config import CONFIG
-from relay.merkle import compute_leaf, compute_merkle_root
+from relay.merkle import (
+    build_supersession_dag,
+    compute_leaf,
+    compute_merkle_root,
+    toposort_docs,
+)
 from relay.models import DocumentPayload, EpochPayload
 
 
@@ -44,9 +49,15 @@ def _scroll_all_docs(client, tenant_id: str, epoch_id: int) -> list[DocumentPayl
 
 
 def _compute_epoch_merkle(docs: list[DocumentPayload]) -> str:
-    """Compute Merkle root from a list of document payloads."""
+    """Compute Merkle root from a list of document payloads.
+
+    Docs are topologically sorted by supersession DAG before hashing so the
+    Merkle root encodes lineage structure, not arbitrary order.
+    """
+    dag = build_supersession_dag(docs)
+    ordered_docs = toposort_docs(docs, dag)
     leaves = []
-    for doc in docs:
+    for doc in ordered_docs:
         leaf = compute_leaf(
             doc_id=doc.doc_id,
             content_hash=doc.content_hash,
@@ -57,7 +68,7 @@ def _compute_epoch_merkle(docs: list[DocumentPayload]) -> str:
             supersedes=doc.supersedes,
         )
         leaves.append(leaf)
-    return compute_merkle_root(leaves)
+    return compute_merkle_root(leaves, ordered=True)
 
 
 def get_next_epoch_id(client, tenant_id: str) -> int:
