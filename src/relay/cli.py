@@ -4,6 +4,7 @@ Commands:
     ingest    — Ingest a document into relay
     supersede — Supersede one document with another
     query     — Temporal semantic query (--at, --epoch, latest)
+    diff      — Compare semantic states between epochs
     epoch     — Epoch management (status, list)
 """
 
@@ -191,6 +192,66 @@ def query(
 
     console.print(table)
     console.print(f"\n  [dim]{result.result_count} results returned[/]\n")
+
+
+@app.command()
+def diff(
+    from_epoch: int = typer.Option(..., "--from", help="Source epoch ID"),
+    to_epoch: int = typer.Option(..., "--to", help="Target epoch ID"),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+):
+    """Compare semantic states between two epochs."""
+    from relay.diff import diff_epochs
+
+    with console.status("[bold magenta]Computing semantic diff..."):
+        result = diff_epochs(
+            from_epoch=from_epoch,
+            to_epoch=to_epoch,
+            tenant_id=tenant,
+        )
+
+    if output_json:
+        console.print_json(result.model_dump_json(indent=2))
+        return
+
+    console.print(f"\n[bold magenta]relay diff[/] — epoch {from_epoch} → {to_epoch}")
+    console.print()
+
+    s = result.summary
+    console.print(
+        f"  [green]+{s.added_count} added[/]  "
+        f"[red]-{s.removed_count} removed[/]  "
+        f"[yellow]~{s.changed_count} changed[/]  "
+        f"[cyan]⟳{s.superseded_count} superseded[/]"
+    )
+    console.print(f"  [dim]semantic drift: {result.semantic_drift.value}[/]")
+    console.print()
+
+    if result.added:
+        console.print("[bold green]Added:[/]")
+        for d in result.added:
+            console.print(f"  + {d.doc_id} ({d.source_file or '-'})")
+
+    if result.removed:
+        console.print("[bold red]Removed:[/]")
+        for d in result.removed:
+            console.print(f"  - {d.doc_id} ({d.source_file or '-'})")
+
+    if result.changed:
+        console.print("[bold yellow]Changed:[/]")
+        for c in result.changed:
+            sim = c.cosine_similarity if c.cosine_similarity is not None else "N/A"
+            console.print(f"  ~ {c.doc_id} (cos_sim={sim})")
+
+    if result.superseded:
+        console.print("[bold cyan]Superseded:[/]")
+        for sup in result.superseded:
+            console.print(f"  ⟳ {sup.doc_id} supersedes {', '.join(sup.supersedes)}")
+
+    console.print()
 
 
 @epoch_app.command("status")
