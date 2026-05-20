@@ -5,6 +5,7 @@ Commands:
     supersede — Supersede one document with another
     query     — Temporal semantic query (--at, --epoch, latest)
     diff      — Compare semantic states between epochs
+    verify    — Verify retrieval against Merkle commitment
     epoch     — Epoch management (status, list)
 """
 
@@ -252,6 +253,59 @@ def diff(
             console.print(f"  ⟳ {sup.doc_id} supersedes {', '.join(sup.supersedes)}")
 
     console.print()
+
+
+@app.command()
+def verify(
+    request_id: str = typer.Option(
+        ..., "--request-id", help="Retrieval request ID to verify"
+    ),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+):
+    """Verify a past retrieval against Merkle commitment."""
+    from relay.verify import verify_retrieval
+
+    with console.status("[bold]Verifying retrieval integrity..."):
+        result = verify_retrieval(request_id=request_id, tenant_id=tenant)
+
+    if output_json:
+        console.print_json(result.model_dump_json(indent=2))
+        return
+
+    if result.status.value == "VERIFIED":
+        panel = Panel(
+            f"[bold green]✓ VERIFIED[/]\n\n"
+            f"  [cyan]epoch[/]:           {result.epoch_id}\n"
+            f"  [cyan]merkle_root[/]:     {(result.stored_merkle_root or '')[:16]}...\n"
+            f"  [cyan]root_match[/]:      {result.root_match}\n"
+            f"  [cyan]docs_verified[/]:   {result.retrieved_doc_count}/{result.epoch_doc_count}\n"
+            f"  [cyan]tenant_match[/]:    {result.tenant_match}\n"
+            f'  [cyan]query[/]:           "{result.query_preview[:50]}"',
+            title="[bold]relay verify[/]",
+            border_style="green",
+        )
+    else:
+        reasons = []
+        if result.root_match is False:
+            reasons.append("Merkle root mismatch")
+        if result.missing_docs:
+            reasons.append(f"Missing docs: {result.missing_docs}")
+        if result.tenant_match is False:
+            reasons.append("Tenant mismatch")
+
+        panel = Panel(
+            f"[bold red]✗ FAILED[/]\n\n"
+            f"  [red]Reasons[/]: {'; '.join(reasons) if reasons else (result.reason or 'unknown')}\n"
+            f"  [cyan]stored_root[/]:   {(result.stored_merkle_root or 'N/A')[:16]}...\n"
+            f"  [cyan]computed_root[/]: {(result.computed_merkle_root or 'N/A')[:16]}...",
+            title="[bold]relay verify[/]",
+            border_style="red",
+        )
+
+    console.print(panel)
 
 
 @epoch_app.command("status")
