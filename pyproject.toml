@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.0.0",
     "pydantic-settings>=2.14.1",
     "ruff>=0.15.13",
+    "fastembed>=0.4.0",
 ]
 
 [project.scripts]

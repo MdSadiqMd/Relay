@@ -17,9 +17,11 @@ class RelayConfig(BaseSettings):
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
 
-    # Embedding model
+    # Embedding models
     model_name: str = "all-MiniLM-L6-v2"
     semantic_dim: int = 384
+    # Qdrant/bm25 — fast (10MB, no ONNX). For SPLADE: prithivida/Splade_PP_en_v1
+    sparse_model_name: str = "Qdrant/bm25"
 
     # Collection names
     documents_collection: str = "relay_documents"
