@@ -1,0 +1,43 @@
+services:
+  # Qdrant vector database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: relay-qdrant
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # relay CLI service
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: relay-cli
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      - RELAY_QDRANT_HOST=qdrant
+      - RELAY_QDRANT_PORT=6333
+    volumes:
+      - ./src/priv:/app/src/priv:ro
+      - ./data:/app/data
+    # Override entrypoint for interactive use
+    entrypoint: ["relay"]
+    # Default: show help. Override with `docker compose run relay <command>`
+    command: ["--help"]
+    profiles:
+      - cli
+
+volumes:
+  qdrant_data:
+    driver: local
