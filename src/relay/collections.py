@@ -1,7 +1,7 @@
 """Qdrant collection setup and client management.
 
 Creates and ensures existence of:
-  - relay_documents  (named vectors: 'semantic' @ 384d)
+  - relay_documents  (named vectors: 'semantic' @ 384d, 'sparse' SPLADE)
   - relay_epochs     (1d dummy vector, payload-only storage)
   - relay_retrieval_logs (1d dummy vector, payload-only storage)
 """
@@ -12,6 +12,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     PayloadSchemaType,
+    SparseIndexParams,
+    SparseVectorParams,
     VectorParams,
 )
 
@@ -38,6 +40,21 @@ def _collection_exists(client: QdrantClient, name: str) -> bool:
         return False
 
 
+def collection_has_sparse(client: QdrantClient, collection_name: str) -> bool:
+    """Return True if the collection has a 'sparse' named vector configured.
+
+    Qdrant does not support adding sparse vectors to an existing collection —
+    they must be present at creation time. Callers use this to decide whether
+    to store/query sparse vectors or fall back to dense-only.
+    """
+    try:
+        info = client.get_collection(collection_name)
+        sparse = getattr(info.config.params, "sparse_vectors", None) or {}
+        return "sparse" in sparse
+    except Exception:
+        return False
+
+
 def ensure_collections() -> QdrantClient:
     """Ensure all relay collections exist in Qdrant. Returns the client."""
     client = get_client()
@@ -49,6 +66,9 @@ def ensure_collections() -> QdrantClient:
                     size=CONFIG.semantic_dim,
                     distance=Distance.COSINE,
                 ),
+            },
+            sparse_vectors_config={
+                "sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))
             },
         )
         # Create payload indices for temporal filtering
