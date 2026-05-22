@@ -8,15 +8,24 @@ from typing import Optional
 from qdrant_client.models import (
     FieldCondition,
     Filter,
+    Fusion,
+    FusionQuery,
     MatchValue,
     PointStruct,
+    Prefetch,
+    SparseVector,
 )
 
-from relay.collections import ensure_collections
+from relay.collections import collection_has_sparse, ensure_collections
 from relay.config import CONFIG
-from relay.embeddings import embed
+from relay.embeddings import embed, sparse_embed
 from relay.epochs import get_current_epoch_id, get_epoch, resolve_epoch_at
-from relay.models import QueryResult, QueryResultItem, RetrievalLogPayload
+from relay.models import (
+    QueryResult,
+    QueryResultItem,
+    RetrievalLogPayload,
+    RetrievalPolicy,
+)
 
 
 def query(
@@ -58,17 +67,52 @@ def query(
         FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
         FieldCondition(key="epoch_id", match=MatchValue(value=resolved_epoch_id)),
     ]
+    qdrant_filter = Filter(must=must_conditions)  # type: ignore[arg-type]
 
-    query_vector = embed(text)
+    try:
+        policy = RetrievalPolicy(retrieval_policy.lower())
+    except ValueError:
+        policy = RetrievalPolicy.DENSE
 
-    results = client.query_points(
-        collection_name=CONFIG.documents_collection,
-        query=query_vector,
-        using="semantic",
-        query_filter=Filter(must=must_conditions),  # type: ignore[arg-type]
-        limit=top_k * 3,  # over-fetch for post-filtering
-        with_payload=True,
-    )
+    if policy == RetrievalPolicy.HYBRID:
+        if not collection_has_sparse(client, CONFIG.documents_collection):
+            raise ValueError(
+                "Hybrid retrieval requires a collection with sparse vectors. "
+                "Recreate the collection (e.g. `just nuke && just demo`) so documents "
+                "are ingested with both dense and sparse vectors."
+            )
+        dense_vector = embed(text)
+        sparse_indices, sparse_values = sparse_embed(text)
+        results = client.query_points(
+            collection_name=CONFIG.documents_collection,
+            prefetch=[
+                Prefetch(
+                    query=dense_vector,
+                    using="semantic",
+                    filter=qdrant_filter,
+                    limit=top_k * 3,
+                ),
+                Prefetch(
+                    query=SparseVector(indices=sparse_indices, values=sparse_values),
+                    using="sparse",
+                    filter=qdrant_filter,
+                    limit=top_k * 3,
+                ),
+            ],
+            query=FusionQuery(fusion=Fusion.RRF),
+            limit=top_k * 3,
+            with_payload=True,
+        )
+    else:
+        dense_vector = embed(text)
+        results = client.query_points(
+            collection_name=CONFIG.documents_collection,
+            query=dense_vector,
+            using="semantic",
+            query_filter=qdrant_filter,
+            limit=top_k * 3,
+            with_payload=True,
+        )
 
     # Post-filter: temporal validity + supersession
     filtered: list[QueryResultItem] = []

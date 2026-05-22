@@ -125,7 +125,7 @@ def query(
     ),
     epoch: Optional[int] = typer.Option(None, "--epoch", help="Pin to specific epoch"),
     retrieval_policy: str = typer.Option(
-        "dense", "--retrieval-policy", help="Retrieval policy"
+        "dense", "--retrieval-policy", help="Retrieval policy: dense | hybrid"
     ),
     top_k: int = typer.Option(5, "--top-k", "-k", help="Number of results"),
     output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
