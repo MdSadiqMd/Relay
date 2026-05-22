@@ -5,11 +5,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from qdrant_client.models import PointStruct
+from qdrant_client.models import PointStruct, SparseVector
 
-from relay.collections import ensure_collections
+from relay.collections import collection_has_sparse, ensure_collections
 from relay.config import CONFIG
-from relay.embeddings import content_hash, embed, embedding_hash
+from relay.embeddings import content_hash, embed, embedding_hash, sparse_embed
 from relay.epochs import create_epoch, get_current_epoch_id, refresh_epoch_merkle
 from relay.models import DocumentPayload, IngestResult
 
@@ -47,8 +47,10 @@ def ingest_file(
     # 2. Content hash
     c_hash = content_hash(text)
 
-    # 3. Embed
+    # 3. Embed (dense always; sparse only when collection supports it)
     vector = embed(text)
+    has_sparse = collection_has_sparse(client, CONFIG.documents_collection)
+    sparse_indices, sparse_values = sparse_embed(text) if has_sparse else ([], [])
 
     # 4. Embedding hash
     e_hash = embedding_hash(vector)
@@ -81,14 +83,18 @@ def ingest_file(
         source_file=path.name,
     )
 
-    # 7. Upsert document
+    # 7. Upsert document (dense always; sparse only when collection supports it)
     point_id = str(uuid.uuid4())
+    vectors: dict = {"semantic": vector}
+    if has_sparse:
+        vectors["sparse"] = SparseVector(indices=sparse_indices, values=sparse_values)
+
     client.upsert(
         collection_name=CONFIG.documents_collection,
         points=[
             PointStruct(
                 id=point_id,
-                vector={"semantic": vector},
+                vector=vectors,
                 payload=doc.model_dump(),
             )
         ],
