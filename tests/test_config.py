@@ -10,6 +10,7 @@ class TestRelayConfig:
         assert cfg.qdrant_port == 6333
         assert cfg.model_name == "all-MiniLM-L6-v2"
         assert cfg.semantic_dim == 384
+        assert cfg.sparse_model_name == "Qdrant/bm25"
         assert cfg.default_tenant == "default"
         assert cfg.default_top_k == 5
 
@@ -21,6 +22,11 @@ class TestRelayConfig:
         assert cfg.qdrant_host == "qdrant-server"
         assert cfg.qdrant_port == 9999
         assert cfg.default_tenant == "acme"
+
+    def test_sparse_model_env_override(self, monkeypatch):
+        monkeypatch.setenv("RELAY_SPARSE_MODEL_NAME", "prithivida/Splade_PP_en_v1")
+        cfg = RelayConfig()
+        assert cfg.sparse_model_name == "prithivida/Splade_PP_en_v1"
 
     def test_collection_names(self):
         cfg = RelayConfig()

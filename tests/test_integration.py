@@ -11,8 +11,10 @@ import uuid
 from pathlib import Path
 
 import pytest
+from qdrant_client.models import Distance, VectorParams
 
-from relay.collections import ensure_collections
+from relay.collections import collection_has_sparse, ensure_collections
+from relay.config import CONFIG
 from relay.models import (
     IngestResult,
     QueryResult,
@@ -101,6 +103,106 @@ class TestQueryPipeline:
         for item in result.results:
             assert item.doc_id
             assert isinstance(item.score, float)
+
+
+class TestHybridRetrieval:
+    """Hybrid (dense + sparse / RRF) retrieval tests — runs after ingest."""
+
+    def test_collection_has_sparse(self, client):
+        assert collection_has_sparse(client, CONFIG.documents_collection) is True
+
+    def test_hybrid_query_returns_results(self, client):
+        from relay.query import query
+
+        result = query(
+            text="event bus architecture",
+            tenant_id=TEST_TENANT,
+            retrieval_policy="hybrid",
+            top_k=5,
+        )
+        assert isinstance(result, QueryResult)
+        assert result.result_count > 0
+        assert result.retrieval_policy == "hybrid"
+
+    def test_hybrid_rrf_scores_normalized(self, client):
+        from relay.query import query
+
+        result = query(
+            text="event bus architecture",
+            tenant_id=TEST_TENANT,
+            retrieval_policy="hybrid",
+            top_k=5,
+        )
+        for item in result.results:
+            assert 0.0 <= item.score <= 1.0
+
+    def test_hybrid_logs_retrieval_policy(self, client):
+        from relay.query import query
+        from relay.collections import get_client
+        from relay.config import CONFIG as cfg
+
+        result = query(
+            text="message broker",
+            tenant_id=TEST_TENANT,
+            retrieval_policy="hybrid",
+            top_k=3,
+        )
+        # Log entry should record the policy as "hybrid"
+        logs = get_client().scroll(
+            collection_name=cfg.logs_collection,
+            scroll_filter=None,
+            limit=100,
+            with_payload=True,
+        )[0]
+        matching = [
+            p.payload
+            for p in logs
+            if p.payload and p.payload.get("request_id") == result.request_id
+        ]
+        assert len(matching) == 1
+        assert matching[0]["retrieval_policy"] == "hybrid"
+
+    def test_hybrid_raises_on_dense_only_collection(self, client, monkeypatch):
+        from relay.query import query as do_query
+
+        tmp = f"relay_test_no_sparse_{uuid.uuid4().hex[:8]}"
+        client.create_collection(
+            collection_name=tmp,
+            vectors_config={
+                "semantic": VectorParams(size=384, distance=Distance.COSINE)
+            },
+        )
+        assert collection_has_sparse(client, tmp) is False
+        monkeypatch.setattr(CONFIG, "documents_collection", tmp)
+        try:
+            with pytest.raises(ValueError, match="sparse vectors"):
+                do_query(text="test", tenant_id=TEST_TENANT, retrieval_policy="hybrid")
+        finally:
+            client.delete_collection(tmp)
+
+    def test_collection_has_sparse_false_for_dense_only(self, client):
+        tmp = f"relay_test_dense_{uuid.uuid4().hex[:8]}"
+        client.create_collection(
+            collection_name=tmp,
+            vectors_config={
+                "semantic": VectorParams(size=384, distance=Distance.COSINE)
+            },
+        )
+        try:
+            assert collection_has_sparse(client, tmp) is False
+        finally:
+            client.delete_collection(tmp)
+
+    def test_invalid_policy_falls_back_to_dense(self, client):
+        from relay.query import query
+
+        result = query(
+            text="event bus architecture",
+            tenant_id=TEST_TENANT,
+            retrieval_policy="nonsense_policy",
+            top_k=3,
+        )
+        assert result.result_count > 0
 
 
 class TestSupersedePipeline:

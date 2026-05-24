@@ -1,10 +1,7 @@
-"""Unit tests for the embeddings module — hashing functions only.
-
-The actual embedding model is NOT loaded in these tests (too slow for unit).
-We only test the deterministic hashing helpers.
-"""
+"""Tests for the embeddings module"""
 
 from relay.embeddings import content_hash, embedding_hash
+from relay.config import CONFIG
 
 
 class TestContentHash:
@@ -17,8 +14,8 @@ class TestContentHash:
     def test_returns_hex(self):
         h = content_hash("test")
         assert isinstance(h, str)
-        assert len(h) == 64  # SHA256 hex digest
-        int(h, 16)  # valid hex
+        assert len(h) == 64
+        int(h, 16)
 
     def test_unicode(self):
         h = content_hash("日本語テスト 🚀")
@@ -43,4 +40,107 @@ class TestEmbeddingHash:
 
     def test_returns_hex(self):
         h = embedding_hash([1.0, 2.0, 3.0])
-        int(h, 16)  # valid hex
+        int(h, 16)
+
+
+class TestDenseEmbed:
+    """Tests for the sentence-transformers dense embedding function."""
+
+    def test_returns_list_of_floats(self):
+        from relay.embeddings import embed
+
+        vec = embed("event streaming kafka")
+        assert isinstance(vec, list)
+        assert all(isinstance(v, float) for v in vec)
+
+    def test_correct_dimension(self):
+        from relay.embeddings import embed
+
+        vec = embed("hello world")
+        assert len(vec) == CONFIG.semantic_dim  # 384
+
+    def test_l2_normalised(self):
+        import math
+        from relay.embeddings import embed
+
+        vec = embed("normalisation check")
+        norm = math.sqrt(sum(v * v for v in vec))
+        assert abs(norm - 1.0) < 1e-5
+
+    def test_deterministic(self):
+        from relay.embeddings import embed
+
+        v1 = embed("reproducible output")
+        v2 = embed("reproducible output")
+        assert v1 == v2
+
+    def test_different_texts_differ(self):
+        from relay.embeddings import embed
+
+        v1 = embed("kafka event streaming broker")
+        v2 = embed("authentication credentials password")
+        assert v1 != v2
+
+    def test_embedding_hash_pipeline(self):
+        """embed() → embedding_hash() produces a stable 64-char hex string."""
+        from relay.embeddings import embed
+
+        vec = embed("pipeline integrity check")
+        h = embedding_hash(vec)
+        assert isinstance(h, str)
+        assert len(h) == 64
+        assert embedding_hash(vec) == h  # deterministic
+
+
+class TestSparseEmbed:
+    """Tests for the BM25 sparse embedding function."""
+
+    def test_returns_lists(self):
+        from relay.embeddings import sparse_embed
+
+        indices, values = sparse_embed("event streaming kafka")
+        assert isinstance(indices, list)
+        assert isinstance(values, list)
+
+    def test_non_empty_for_content(self):
+        from relay.embeddings import sparse_embed
+
+        indices, values = sparse_embed("event streaming kafka")
+        assert len(indices) > 0
+        assert len(values) > 0
+
+    def test_indices_values_same_length(self):
+        from relay.embeddings import sparse_embed
+
+        indices, values = sparse_embed("message broker architecture")
+        assert len(indices) == len(values)
+
+    def test_deterministic(self):
+        from relay.embeddings import sparse_embed
+
+        i1, v1 = sparse_embed("hello world")
+        i2, v2 = sparse_embed("hello world")
+        assert i1 == i2
+        assert v1 == v2
+
+    def test_different_texts_differ(self):
+        from relay.embeddings import sparse_embed
+
+        i1, _ = sparse_embed("kafka event streaming broker")
+        i2, _ = sparse_embed("authentication credentials password")
+        assert set(i1) != set(i2)
+
+    def test_element_types(self):
+        from relay.embeddings import sparse_embed
+
+        indices, values = sparse_embed("test text")
+        assert all(isinstance(i, int) for i in indices)
+        assert all(isinstance(v, float) for v in values)
+
+    def test_empty_string_handled(self):
+        from relay.embeddings import sparse_embed
+
+        indices, values = sparse_embed("")
+        assert isinstance(indices, list)
+        assert isinstance(values, list)
+        assert len(indices) == len(values)
