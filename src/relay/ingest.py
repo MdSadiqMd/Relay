@@ -10,7 +10,7 @@ from qdrant_client.models import PointStruct, SparseVector
 from relay.collections import collection_has_sparse, ensure_collections
 from relay.config import CONFIG
 from relay.embeddings import content_hash, embed, embedding_hash, sparse_embed
-from relay.epochs import create_epoch, get_current_epoch_id, refresh_epoch_merkle
+from relay.epochs import create_epoch, get_next_epoch_id
 from relay.models import DocumentPayload, IngestResult
 
 
@@ -31,7 +31,7 @@ def ingest_file(
         4. Compute embedding_hash = SHA256(embedding)
         5. Generate doc_id
         6. Upsert to relay_documents with full payload
-        7. Create/update epoch with recomputed Merkle root
+        7. Create new immutable epoch with Merkle root
 
     Returns:
         IngestResult with doc_id, epoch_id, hashes, merkle_root
@@ -58,12 +58,8 @@ def ingest_file(
     # 5. Generate doc_id (use filename stem + short uuid for uniqueness)
     doc_id = f"{path.stem}_{uuid.uuid4().hex[:8]}"
 
-    # 6. Determine epoch
-    current_epoch = get_current_epoch_id(client, tenant_id)
-    if current_epoch is None:
-        epoch_id = 1
-    else:
-        epoch_id = current_epoch
+    # 6. Determine epoch — each ingest creates a new immutable epoch
+    epoch_id = get_next_epoch_id(client, tenant_id)
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -100,14 +96,10 @@ def ingest_file(
         ],
     )
 
-    # 8. Create or refresh epoch
-    if current_epoch is None:
-        epoch_data = create_epoch(client, tenant_id, CONFIG.model_name)
-        merkle_root = epoch_data.merkle_root
-        final_epoch_id = epoch_data.epoch_id
-    else:
-        merkle_root = refresh_epoch_merkle(client, tenant_id, epoch_id)
-        final_epoch_id = epoch_id
+    # 8. Create new immutable epoch with updated Merkle root
+    epoch_data = create_epoch(client, tenant_id, CONFIG.model_name)
+    merkle_root = epoch_data.merkle_root
+    final_epoch_id = epoch_data.epoch_id
 
     return IngestResult(
         doc_id=doc_id,
