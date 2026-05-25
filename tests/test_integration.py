@@ -11,7 +11,13 @@ import uuid
 from pathlib import Path
 
 import pytest
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    VectorParams,
+)
 
 from relay.collections import collection_has_sparse, ensure_collections
 from relay.config import CONFIG
@@ -72,6 +78,16 @@ class TestIngestPipeline:
         assert isinstance(result, IngestResult)
         assert result.source_file == "nats_migration.md"
         self.__class__._nats_doc_id = result.doc_id
+
+    def test_epoch_has_leaf_hashes(self, client):
+        from relay.epochs import get_epoch
+
+        epoch = get_epoch(client, TEST_TENANT, 1)
+        assert epoch is not None
+        assert len(epoch.leaf_hashes) == 1
+        assert len(epoch.doc_ids) == 1
+        assert epoch.doc_ids[0] == self.__class__._kafka_doc_id
+        assert len(epoch.leaf_hashes[0]) == 64  # hex-encoded SHA256
 
 
 class TestQueryPipeline:
@@ -222,6 +238,32 @@ class TestSupersedePipeline:
         assert result.old_doc_ids  # list of superseded doc ids
         self.__class__._supersede_epoch = result.epoch.epoch_id
 
+    def test_supersede_epoch_has_leaf_hashes(self, client):
+        from relay.epochs import get_epoch
+        from relay.collections import get_client
+        from relay.config import CONFIG as cfg
+
+        epoch = get_epoch(client, TEST_TENANT, 3)
+        assert epoch is not None
+        assert len(epoch.leaf_hashes) == 2
+        assert len(epoch.doc_ids) == 2
+        for h in epoch.leaf_hashes:
+            assert len(h) == 64
+        # Verify all doc_ids exist in the epoch's documents
+        for did in epoch.doc_ids:
+            pts, _ = get_client().scroll(
+                collection_name=cfg.documents_collection,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(key="doc_id", match=MatchValue(value=did)),
+                        FieldCondition(key="epoch_id", match=MatchValue(value=3)),
+                    ]
+                ),
+                limit=1,
+                with_payload=True,
+            )
+            assert len(pts) == 1, f"doc_id {did} not found in epoch 3"
+
 
 class TestTimeTravel:
     """Phase 4: Historical queries with --at."""
@@ -320,6 +362,10 @@ class TestEpochManagement:
         assert epoch is not None
         assert epoch.doc_count >= 1
         assert len(epoch.merkle_root) == 64
+        assert len(epoch.leaf_hashes) == epoch.doc_count
+        assert len(epoch.doc_ids) == epoch.doc_count
+        for h in epoch.leaf_hashes:
+            assert len(h) == 64
 
     def test_get_nonexistent_epoch(self, client):
         from relay.epochs import get_epoch

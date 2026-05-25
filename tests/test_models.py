@@ -102,6 +102,8 @@ class TestEpochPayload:
             parent_epoch=1,
         )
         assert epoch.parent_epoch == 1
+        assert epoch.leaf_hashes == []
+        assert epoch.doc_ids == []
 
     def test_create_without_parent(self):
         epoch = EpochPayload(
@@ -113,6 +115,39 @@ class TestEpochPayload:
             model_version="all-MiniLM-L6-v2",
         )
         assert epoch.parent_epoch is None
+        assert epoch.leaf_hashes == []
+        assert epoch.doc_ids == []
+
+    def test_with_leaf_hashes(self):
+        epoch = EpochPayload(
+            epoch_id=3,
+            tenant_id="acme",
+            created_at="now",
+            merkle_root="abc123",
+            doc_count=2,
+            model_version="v1",
+            leaf_hashes=["a" * 64, "b" * 64],
+            doc_ids=["doc_1", "doc_2"],
+        )
+        assert len(epoch.leaf_hashes) == 2
+        assert epoch.leaf_hashes[0] == "a" * 64
+        assert epoch.doc_ids == ["doc_1", "doc_2"]
+        assert epoch.doc_count == 2
+
+    def test_roundtrip_with_leaf_hashes(self):
+        epoch = EpochPayload(
+            epoch_id=5,
+            tenant_id="t",
+            created_at="now",
+            merkle_root="root",
+            doc_count=2,
+            model_version="v1",
+            leaf_hashes=["leaf1", "leaf2"],
+            doc_ids=["d1", "d2"],
+        )
+        data = epoch.model_dump()
+        restored = EpochPayload(**data)
+        assert restored == epoch
 
     def test_json_serialization(self):
         epoch = EpochPayload(
@@ -125,6 +160,8 @@ class TestEpochPayload:
         )
         json_str = epoch.model_dump_json()
         assert '"epoch_id":1' in json_str
+        assert '"leaf_hashes":[]' in json_str
+        assert '"doc_ids":[]' in json_str
 
 
 class TestIngestResult:
