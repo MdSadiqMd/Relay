@@ -72,41 +72,38 @@ def _compute_epoch_merkle(docs: list[DocumentPayload]) -> str:
 
 
 def get_next_epoch_id(client, tenant_id: str) -> int:
-    """Determine the next epoch ID for a tenant."""
-    results, _ = client.scroll(
+    """Determine the next epoch ID for a tenant.
+
+    Uses client.count() which is O(1) with payload indexing — no full scroll.
+    Epoch IDs are strictly sequential (1, 2, 3, ...) since epochs are immutable
+    and never deleted, so count == max epoch ID.
+    """
+    count_result = client.count(
         collection_name=CONFIG.epochs_collection,
-        scroll_filter=Filter(
+        count_filter=Filter(
             must=[
                 FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
             ]
         ),
-        limit=1000,
-        with_payload=True,
-        with_vectors=False,
+        exact=True,
     )
-    if not results:
-        return 1
-    epoch_ids = [p.payload["epoch_id"] for p in results]
-    return max(epoch_ids) + 1
+    return count_result.count + 1
 
 
 def get_current_epoch_id(client, tenant_id: str) -> Optional[int]:
     """Get the current (latest) epoch ID for a tenant, or None if none exist."""
-    results, _ = client.scroll(
+    count_result = client.count(
         collection_name=CONFIG.epochs_collection,
-        scroll_filter=Filter(
+        count_filter=Filter(
             must=[
                 FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
             ]
         ),
-        limit=1000,
-        with_payload=True,
-        with_vectors=False,
+        exact=True,
     )
-    if not results:
+    if count_result.count == 0:
         return None
-    epoch_ids = [p.payload["epoch_id"] for p in results]
-    return max(epoch_ids)
+    return count_result.count
 
 
 def create_epoch(
@@ -224,7 +221,7 @@ def list_epochs(client, tenant_id: str) -> list[EpochPayload]:
                 FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
             ]
         ),
-        limit=1000,
+        limit=10000,
         with_payload=True,
         with_vectors=False,
     )
@@ -261,9 +258,7 @@ def resolve_epoch_at(client, tenant_id: str, timestamp: str) -> Optional[EpochPa
     if not all_epochs:
         return None
 
-    # Find the latest epoch created at or before the timestamp
     candidates = [e for e in all_epochs if e.created_at <= timestamp]
     if not candidates:
-        # Fall back to earliest epoch
         return all_epochs[0]
     return candidates[-1]

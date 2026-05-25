@@ -22,6 +22,9 @@ from relay.config import CONFIG
 # Module-level client singleton
 _client: Optional[QdrantClient] = None
 
+# Cache for collection_has_sparse() — collection schema never changes at runtime
+_has_sparse_cache: dict[str, bool] = {}
+
 
 def get_client() -> QdrantClient:
     """Get or create the Qdrant client singleton."""
@@ -46,13 +49,29 @@ def collection_has_sparse(client: QdrantClient, collection_name: str) -> bool:
     Qdrant does not support adding sparse vectors to an existing collection —
     they must be present at creation time. Callers use this to decide whether
     to store/query sparse vectors or fall back to dense-only.
+
+    Result is cached — the collection schema never changes at runtime.
     """
+    if collection_name in _has_sparse_cache:
+        return _has_sparse_cache[collection_name]
+
     try:
         info = client.get_collection(collection_name)
         sparse = getattr(info.config.params, "sparse_vectors", None) or {}
-        return "sparse" in sparse
+        result = "sparse" in sparse
     except Exception:
-        return False
+        result = False
+
+    _has_sparse_cache[collection_name] = result
+    return result
+
+
+def invalidate_has_sparse_cache(collection_name: str) -> None:
+    """Invalidate the sparse cache entry for a collection.
+
+    Called when a collection's schema may have changed (e.g., during testing).
+    """
+    _has_sparse_cache.pop(collection_name, None)
 
 
 def ensure_collections() -> QdrantClient:
