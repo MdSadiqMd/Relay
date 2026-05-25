@@ -11,6 +11,7 @@ from relay.collections import collection_has_sparse, ensure_collections
 from relay.config import CONFIG
 from relay.embeddings import content_hash, embed, embedding_hash, sparse_embed
 from relay.epochs import create_epoch, get_next_epoch_id
+from relay.merkle import compute_leaf
 from relay.models import DocumentPayload, IngestResult
 
 
@@ -96,8 +97,24 @@ def ingest_file(
         ],
     )
 
-    # 8. Create new immutable epoch with updated Merkle root
-    epoch_data = create_epoch(client, tenant_id, CONFIG.model_name)
+    # 8. Compute leaf hash and create new immutable epoch
+    leaf = compute_leaf(
+        doc_id=doc.doc_id,
+        content_hash=doc.content_hash,
+        embedding_hash=doc.embedding_hash,
+        model_version=doc.model_version,
+        valid_from=doc.valid_from,
+        valid_to=doc.valid_to,
+        supersedes=doc.supersedes,
+    )
+    epoch_data = create_epoch(
+        client,
+        tenant_id,
+        CONFIG.model_name,
+        leaf_hashes=[leaf],
+        doc_ids=[doc.doc_id],
+        epoch_id=epoch_id,
+    )
     merkle_root = epoch_data.merkle_root
     final_epoch_id = epoch_data.epoch_id
 

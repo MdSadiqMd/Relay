@@ -64,6 +64,8 @@ class EpochPayload(BaseModel):
     doc_count: int
     model_version: str
     parent_epoch: Optional[int] = None
+    leaf_hashes: list[str] = Field(default_factory=list)
+    doc_ids: list[str] = Field(default_factory=list)
 
 
 class RetrievalLogPayload(BaseModel):

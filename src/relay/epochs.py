@@ -35,7 +35,7 @@ def _scroll_all_docs(client, tenant_id: str, epoch_id: int) -> list[DocumentPayl
                     FieldCondition(key="epoch_id", match=MatchValue(value=epoch_id)),
                 ]
             ),
-            limit=100,
+            limit=10000,
             offset=offset,
             with_payload=True,
             with_vectors=False,
@@ -109,28 +109,51 @@ def get_current_epoch_id(client, tenant_id: str) -> Optional[int]:
     return max(epoch_ids)
 
 
-def create_epoch(client, tenant_id: str, model_version: str) -> EpochPayload:
+def create_epoch(
+    client,
+    tenant_id: str,
+    model_version: str,
+    leaf_hashes: list[bytes] | None = None,
+    doc_ids: list[str] | None = None,
+    epoch_id: int | None = None,
+) -> EpochPayload:
     """Create a new semantic epoch.
 
-    Computes Merkle root over all documents in the new epoch.
+    If leaf_hashes and doc_ids are provided, uses them directly (no Qdrant scroll).
+    Otherwise falls back to scrolling all documents tagged with this epoch
+    (backward compat for legacy callers).
+
+    If epoch_id is provided, uses it instead of computing the next ID
+    (avoids an extra scroll when the caller already knows the epoch ID).
+
     Returns the epoch as a validated Pydantic model.
     """
-    epoch_id = get_next_epoch_id(client, tenant_id)
+    if epoch_id is None:
+        epoch_id = get_next_epoch_id(client, tenant_id)
     parent_epoch = epoch_id - 1 if epoch_id > 1 else None
-
-    # Get all docs tagged with this epoch
-    docs = _scroll_all_docs(client, tenant_id, epoch_id)
-    merkle_root = _compute_epoch_merkle(docs)
-
     now = datetime.now(timezone.utc).isoformat()
+
+    if leaf_hashes is not None and doc_ids is not None:
+        merkle_root = compute_merkle_root(leaf_hashes, ordered=True)
+        leaf_hashes_hex = [h.hex() for h in leaf_hashes]
+        doc_count = len(leaf_hashes)
+    else:
+        docs = _scroll_all_docs(client, tenant_id, epoch_id)
+        merkle_root = _compute_epoch_merkle(docs)
+        leaf_hashes_hex = []
+        doc_ids = [d.doc_id for d in docs]
+        doc_count = len(docs)
+
     epoch = EpochPayload(
         epoch_id=epoch_id,
         tenant_id=tenant_id,
         created_at=now,
         merkle_root=merkle_root,
-        doc_count=len(docs),
+        doc_count=doc_count,
         model_version=model_version,
         parent_epoch=parent_epoch,
+        leaf_hashes=leaf_hashes_hex,
+        doc_ids=doc_ids or [],
     )
 
     point_id = str(uuid.uuid4())

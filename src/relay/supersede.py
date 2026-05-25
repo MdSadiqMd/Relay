@@ -21,6 +21,11 @@ from qdrant_client.models import (
 from relay.collections import ensure_collections
 from relay.config import CONFIG
 from relay.epochs import create_epoch, get_next_epoch_id
+from relay.merkle import (
+    build_supersession_dag,
+    compute_leaf,
+    toposort_docs,
+)
 from relay.models import DocumentPayload, SupersedeResult
 
 
@@ -109,25 +114,19 @@ def supersede(
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     old_doc_ids = [doc.doc_id for doc in old_docs]
+    copies: list[DocumentPayload] = []
+    copy_vectors: list = []
 
     for old_doc, old_vectors in zip(old_docs, old_vectors_list):
-        old_copy = old_doc.model_copy(
+        copy = old_doc.model_copy(
             update={
                 "superseded_by": new_doc.doc_id,
                 "valid_to": now,
                 "epoch_id": next_epoch_id,
             }
         )
-        client.upsert(
-            collection_name=CONFIG.documents_collection,
-            points=[
-                PointStruct(
-                    id=str(uuid.uuid4()),
-                    vector=old_vectors,
-                    payload=old_copy.model_dump(),
-                )
-            ],
-        )
+        copies.append(copy)
+        copy_vectors.append(old_vectors)
 
     new_copy = new_doc.model_copy(
         update={
@@ -135,18 +134,47 @@ def supersede(
             "epoch_id": next_epoch_id,
         }
     )
-    client.upsert(
-        collection_name=CONFIG.documents_collection,
-        points=[
-            PointStruct(
-                id=str(uuid.uuid4()),
-                vector=new_vectors,
-                payload=new_copy.model_dump(),
-            )
-        ],
-    )
+    copies.append(new_copy)
+    copy_vectors.append(new_vectors)
 
-    epoch_data = create_epoch(client, tenant_id, CONFIG.model_name)
+    # Compute leaf hashes in topological order
+    dag = build_supersession_dag(copies)
+    ordered_copies = toposort_docs(copies, dag)
+    leaves: list[bytes] = []
+    doc_ids: list[str] = []
+    for doc in ordered_copies:
+        leaf = compute_leaf(
+            doc_id=doc.doc_id,
+            content_hash=doc.content_hash,
+            embedding_hash=doc.embedding_hash,
+            model_version=doc.model_version,
+            valid_from=doc.valid_from,
+            valid_to=doc.valid_to,
+            supersedes=doc.supersedes,
+        )
+        leaves.append(leaf)
+        doc_ids.append(doc.doc_id)
+
+    # Upsert all copies
+    for copy, vec in zip(copies, copy_vectors):
+        client.upsert(
+            collection_name=CONFIG.documents_collection,
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=vec,
+                    payload=copy.model_dump(),
+                )
+            ],
+        )
+
+    epoch_data = create_epoch(
+        client,
+        tenant_id,
+        CONFIG.model_name,
+        leaf_hashes=leaves,
+        doc_ids=doc_ids,
+    )
 
     return SupersedeResult(
         old_doc_ids=old_doc_ids,

@@ -28,7 +28,7 @@ def _scroll_epoch_docs(client, tenant_id: str, epoch_id: int) -> list[dict]:
                     FieldCondition(key="epoch_id", match=MatchValue(value=epoch_id)),
                 ]
             ),
-            limit=100,
+            limit=10000,
             offset=offset,
             with_payload=True,
             with_vectors=True,
