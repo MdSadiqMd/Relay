@@ -217,7 +217,7 @@ class TestSupersedePipeline:
             tenant_id=TEST_TENANT,
         )
         assert isinstance(result, SupersedeResult)
-        assert result.epoch.epoch_id == 2
+        assert result.epoch.epoch_id == 3
         assert result.old_valid_to  # should be set
         assert result.old_doc_ids  # list of superseded doc ids
         self.__class__._supersede_epoch = result.epoch.epoch_id
@@ -259,11 +259,11 @@ class TestDiffPipeline:
 
         result = diff_epochs(
             from_epoch=1,
-            to_epoch=2,
+            to_epoch=3,
             tenant_id=TEST_TENANT,
         )
         assert result.epoch_from == 1
-        assert result.epoch_to == 2
+        assert result.epoch_to == 3
         assert result.summary.superseded_count >= 1
         # Supersession info should reference the correct docs
         for sup in result.superseded:
