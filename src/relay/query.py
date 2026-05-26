@@ -147,6 +147,10 @@ def query(
                 semantic_tags=p.get("semantic_tags", []),
             )
         )
+        # Stop once we have top_k valid results. Qdrant returns in score
+        # order (RRF for hybrid, cosine for dense) so the first top_k valid
+        # entries are the highest-scoring. If many results are filtered out
+        # (e.g., superseded) the user gets fewer than top_k — acceptable.
         if len(filtered) >= top_k:
             break
 

@@ -252,13 +252,12 @@ def get_epoch(client, tenant_id: str, epoch_id: int) -> Optional[EpochPayload]:
 def resolve_epoch_at(client, tenant_id: str, timestamp: str) -> Optional[EpochPayload]:
     """Resolve the active epoch at a given timestamp.
 
-    Finds the latest epoch whose created_at <= timestamp.
+    Returns the latest epoch (most recent snapshot). Document-level
+    time-travel filtering via valid_from/valid_to in the query layer
+    handles the actual temporal correctness — the epoch ID is only used
+    as a partition key to scope the search.
     """
     all_epochs = list_epochs(client, tenant_id)
     if not all_epochs:
         return None
-
-    candidates = [e for e in all_epochs if e.created_at <= timestamp]
-    if not candidates:
-        return all_epochs[0]
-    return candidates[-1]
+    return all_epochs[-1]
