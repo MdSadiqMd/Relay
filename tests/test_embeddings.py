@@ -144,3 +144,40 @@ class TestSparseEmbed:
         assert isinstance(indices, list)
         assert isinstance(values, list)
         assert len(indices) == len(values)
+
+
+class TestEmbedCache:
+    """`@lru_cache` on embed() / sparse_embed() — identity & hit counting."""
+
+    def test_embed_returns_same_object_for_same_text(self):
+        from relay.embeddings import embed
+
+        v1 = embed("cache identity test")
+        v2 = embed("cache identity test")
+        assert v1 is v2
+
+    def test_embed_cache_hits(self):
+        from relay.embeddings import embed
+
+        embed.cache_clear()
+        assert embed.cache_info().hits == 0
+        embed("hit me")
+        embed("hit me")
+        assert embed.cache_info().hits == 1
+
+    def test_sparse_embed_returns_same_objects_for_same_text(self):
+        from relay.embeddings import sparse_embed
+
+        i1, v1 = sparse_embed("cache identity test")
+        i2, v2 = sparse_embed("cache identity test")
+        assert i1 is i2
+        assert v1 is v2
+
+    def test_sparse_embed_cache_hits(self):
+        from relay.embeddings import sparse_embed
+
+        sparse_embed.cache_clear()
+        assert sparse_embed.cache_info().hits == 0
+        sparse_embed("hit me")
+        sparse_embed("hit me")
+        assert sparse_embed.cache_info().hits == 1

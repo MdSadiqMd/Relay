@@ -19,7 +19,12 @@ from qdrant_client.models import (
     VectorParams,
 )
 
-from relay.collections import collection_has_sparse, ensure_collections
+from relay.collections import (
+    _has_sparse_cache,
+    collection_has_sparse,
+    ensure_collections,
+    invalidate_has_sparse_cache,
+)
 from relay.config import CONFIG
 from relay.models import (
     IngestResult,
@@ -209,6 +214,37 @@ class TestHybridRetrieval:
         finally:
             client.delete_collection(tmp)
 
+    def test_collection_has_sparse_cache_hit(self, client):
+        _has_sparse_cache.clear()
+        assert CONFIG.documents_collection not in _has_sparse_cache
+        result = collection_has_sparse(client, CONFIG.documents_collection)
+        assert result is True
+        assert _has_sparse_cache[CONFIG.documents_collection] is True
+
+    def test_collection_has_sparse_cache_negative(self, client):
+        tmp = f"relay_test_cache_neg_{uuid.uuid4().hex[:8]}"
+        client.create_collection(
+            collection_name=tmp,
+            vectors_config={
+                "semantic": VectorParams(size=384, distance=Distance.COSINE)
+            },
+        )
+        try:
+            assert tmp not in _has_sparse_cache
+            result = collection_has_sparse(client, tmp)
+            assert result is False
+            assert _has_sparse_cache[tmp] is False
+        finally:
+            client.delete_collection(tmp)
+            invalidate_has_sparse_cache(tmp)
+
+    def test_invalidate_has_sparse_cache_clears_entry(self, client):
+        _has_sparse_cache.clear()
+        collection_has_sparse(client, CONFIG.documents_collection)
+        assert CONFIG.documents_collection in _has_sparse_cache
+        invalidate_has_sparse_cache(CONFIG.documents_collection)
+        assert CONFIG.documents_collection not in _has_sparse_cache
+
     def test_invalid_policy_falls_back_to_dense(self, client):
         from relay.query import query
 
@@ -372,3 +408,29 @@ class TestEpochManagement:
 
         epoch = get_epoch(client, TEST_TENANT, 999)
         assert epoch is None
+
+    def test_get_next_epoch_id(self, client):
+        from relay.epochs import get_next_epoch_id
+
+        nid = get_next_epoch_id(client, TEST_TENANT)
+        assert isinstance(nid, int)
+        assert nid > 0
+
+    def test_get_next_epoch_id_no_epochs(self, client):
+        from relay.epochs import get_next_epoch_id
+
+        nid = get_next_epoch_id(client, "nonexistent_tenant")
+        assert nid == 1
+
+    def test_get_current_epoch_id(self, client):
+        from relay.epochs import get_current_epoch_id
+
+        cid = get_current_epoch_id(client, TEST_TENANT)
+        assert isinstance(cid, int)
+        assert cid >= 2
+
+    def test_get_current_epoch_id_nonexistent(self, client):
+        from relay.epochs import get_current_epoch_id
+
+        cid = get_current_epoch_id(client, "nonexistent_tenant")
+        assert cid is None
