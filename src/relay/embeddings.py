@@ -1,5 +1,6 @@
 """Embedding manager — handles model loading, encoding, and hashing."""
 
+import functools
 import hashlib
 import struct
 from typing import TYPE_CHECKING, Optional
@@ -32,6 +33,7 @@ def _get_sparse_model() -> "SparseTextEmbedding":
     return _sparse_model
 
 
+@functools.lru_cache(maxsize=1024)
 def embed(text: str) -> list[float]:
     """Embed a text string into a dense vector."""
     model = _get_model()
@@ -39,6 +41,7 @@ def embed(text: str) -> list[float]:
     return vector.tolist()
 
 
+@functools.lru_cache(maxsize=1024)
 def sparse_embed(text: str) -> tuple[list[int], list[float]]:
     """Compute a SPLADE sparse embedding — returns (indices, values)."""
     model = _get_sparse_model()
