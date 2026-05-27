@@ -168,20 +168,17 @@ class TestHybridRetrieval:
             retrieval_policy="hybrid",
             top_k=3,
         )
-        # Log entry should record the policy as "hybrid"
-        logs = get_client().scroll(
+        # Retrieve the log entry by point ID — more reliable than scroll
+        # (Qdrant scroll has eventual-consistency gaps for recent writes).
+        points = get_client().retrieve(
             collection_name=cfg.logs_collection,
-            scroll_filter=None,
-            limit=100,
+            ids=[result.request_id],
             with_payload=True,
-        )[0]
-        matching = [
-            p.payload
-            for p in logs
-            if p.payload and p.payload.get("request_id") == result.request_id
-        ]
-        assert len(matching) == 1
-        assert matching[0]["retrieval_policy"] == "hybrid"
+        )
+        assert len(points) == 1
+        payload = points[0].payload
+        assert payload is not None
+        assert payload["retrieval_policy"] == "hybrid"
 
     def test_hybrid_raises_on_dense_only_collection(self, client, monkeypatch):
         from relay.query import query as do_query
@@ -310,13 +307,13 @@ class TestTimeTravel:
         result = query(
             text="event bus architecture",
             tenant_id=TEST_TENANT,
-            at="2024-06-01",
+            at="2025-06-01",
         )
         assert isinstance(result, QueryResult)
-        # Should find docs valid at 2024-06-01 and not superseded
+        assert result.result_count > 0
+        # Should find docs valid at 2025-06-01 and not superseded
         for item in result.results:
-            if item.valid_from:
-                assert item.valid_from <= "2024-06-01"
+            assert item.valid_from <= "2025-06-01"
 
     def test_epoch_pinned_query(self, client):
         from relay.query import query
