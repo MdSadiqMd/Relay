@@ -1,10 +1,16 @@
-"""Temporal retrieval engine — time-travel queries with epoch pinning."""
+"""Temporal retrieval engine — time-travel queries with epoch pinning.
+
+Provides both raw ``QueryResult`` output (``query()``) and LlamaIndex-native
+``NodeWithScore`` output (``query_nodes()``) — the latter weaves LlamaIndex
+directly into relay's core retrieval layer.
+"""
 
 import hashlib
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
+from llama_index.core.schema import NodeWithScore, TextNode
 from qdrant_client.models import (
     FieldCondition,
     Filter,
@@ -191,3 +197,55 @@ def query(
         result_count=len(filtered),
         results=filtered,
     )
+
+
+def query_nodes(
+    text: str,
+    tenant_id: str,
+    at: Optional[str] = None,
+    epoch_id: Optional[int] = None,
+    retrieval_policy: str = "dense",
+    top_k: int = 5,
+    text_resolver: Optional[Callable[[str, Optional[str]], str]] = None,
+) -> tuple[list[NodeWithScore], int]:
+    """Execute a temporal semantic query and return results as LlamaIndex nodes.
+
+    Same retrieval logic as :func:`query` but returns ``NodeWithScore`` objects
+    with resolved document text via the optional ``text_resolver`` callback.
+    This weaves LlamaIndex directly into relay's core retrieval layer.
+
+    Returns:
+        ``(nodes, epoch_id)`` — the nodes and the resolved epoch.
+    """
+    result = query(
+        text=text,
+        tenant_id=tenant_id,
+        at=at,
+        epoch_id=epoch_id,
+        retrieval_policy=retrieval_policy,
+        top_k=top_k,
+    )
+    nodes: list[NodeWithScore] = []
+    for item in result.results:
+        text_content = ""
+        if text_resolver is not None:
+            text_content = text_resolver(item.doc_id, item.source_file)
+        node = TextNode(
+            id_=item.doc_id,
+            text=text_content,
+            metadata={
+                "doc_id": item.doc_id,
+                "score": item.score,
+                "source_file": item.source_file,
+                "content_hash": item.content_hash,
+                "valid_from": item.valid_from,
+                "valid_to": item.valid_to,
+                "supersedes": item.supersedes,
+                "superseded_by": item.superseded_by,
+                "semantic_tags": item.semantic_tags,
+                "epoch_id": result.epoch_id,
+                "request_id": result.request_id,
+            },
+        )
+        nodes.append(NodeWithScore(node=node, score=item.score))
+    return nodes, result.epoch_id

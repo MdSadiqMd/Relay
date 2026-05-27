@@ -33,5 +33,14 @@ class RelayConfig(BaseSettings):
     default_retrieval_policy: str = "dense"
     default_top_k: int = 5
 
+    # LLM provider — "local" (HF), "openai", or "anthropic"
+    llm_provider: str = "local"
+    # OpenAI
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    # Anthropic
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-20250514"
+
 
 CONFIG = RelayConfig()
