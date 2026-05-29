@@ -17,6 +17,7 @@ class RetrievalPolicy(str, Enum):
     DENSE = "dense"
     HYBRID = "hybrid"
     NAMED_VECTORS = "named_vectors"
+    MULTIMODAL = "multimodal"
 
 
 class VerifyStatus(str, Enum):
@@ -43,6 +44,7 @@ class DocumentPayload(BaseModel):
     tenant_id: str
     content_hash: str
     embedding_hash: str
+    video_embedding_hash: Optional[str] = None
     model_version: str
     valid_from: str
     valid_to: Optional[str] = None
@@ -175,6 +177,18 @@ class DiffResult(BaseModel):
     superseded: list[SupersessionInfo] = Field(default_factory=list)
     semantic_drift: DriftLevel = DriftLevel.NONE
     summary: DiffSummary
+
+
+class VideoIngestResult(BaseModel):
+    """Result from a TwelveLabs video ingestion pipeline."""
+
+    source_url: str
+    doc_id: str
+    epoch_id: int
+    content_hash: str
+    embedding_hash: str
+    merkle_root: str
+    transcript_preview: str = ""
 
 
 class VerifyResult(BaseModel):
