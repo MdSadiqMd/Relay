@@ -2879,11 +2879,15 @@ anthropic = [
 openai = [
     { name = "llama-index-llms-openai" },
 ]
+video = [
+    { name = "twelvelabs" },
+]
 
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
     { name = "pytest" },
+    { name = "twelvelabs" },
 ]
 
 [package.metadata]
@@ -2898,14 +2902,16 @@ requires-dist = [
     { name = "rich", specifier = ">=15.0.0" },
     { name = "ruff", specifier = ">=0.15.13" },
     { name = "sentence-transformers", specifier = ">=5.5.0" },
+    { name = "twelvelabs", marker = "extra == 'video'", specifier = ">=1.2.4" },
     { name = "typer", specifier = ">=0.25.1" },
 ]
-provides-extras = ["openai", "anthropic"]
+provides-extras = ["openai", "anthropic", "video"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=2.1.0" },
     { name = "pytest", specifier = ">=9.0.3" },
+    { name = "twelvelabs", specifier = ">=1.2.4" },
 ]
 
 [[package]]
@@ -3441,6 +3447,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/af/9904ec6d3c93d9b24e5ec360445bbdf758b7f00bfbeedb89cb0eb64eb8bb/triton-3.7.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b9b85e72968a9d8bba5ddb24e9b64aaabaf48affb042f2755cb7cfa92b7531ce", size = 201460637, upload-time = "2026-05-07T18:46:34.749Z" },
     { url = "https://files.pythonhosted.org/packages/a1/f9/4835a8ea746b88727d8899f4e3ccce4f9cacb38abfc3bb0a638266c53111/triton-3.7.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:18a160de426fd99f92b0baf509045360afbd3bfaa0b4a5171dde800ec9f09684", size = 188608706, upload-time = "2026-05-07T19:05:39.218Z" },
     { url = "https://files.pythonhosted.org/packages/c1/68/fa86e5a39608000f645535b2c124920126327ab731f8c4fafd5b07ff8d4b/triton-3.7.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ce061073102714b725f3660ec6939d94a1da7984b3aa99c921417cae273672f5", size = 201546766, upload-time = "2026-05-07T18:46:42.088Z" },
+]
+
+[[package]]
+name = "twelvelabs"
+version = "1.2.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8e/85/514cbf14973969150f6492c0ae6791f29cfec6f1e1e6cd471103fd228244/twelvelabs-1.2.4.tar.gz", hash = "sha256:337fd826906061c092f63107a94df87cdfcc404c9cb2d006d8644712c6d0104f", size = 160775, upload-time = "2026-05-07T09:56:13.612Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/f0/5d91ed7a6c5b1bea8b9fd1b717dab49e609ef99c6382fb91e2873d1f9d9d/twelvelabs-1.2.4-py3-none-any.whl", hash = "sha256:e3953786b7f746bac27ad3860c7c987674d08c172561300376845bcd4d820a45", size = 342958, upload-time = "2026-05-07T09:56:12.15Z" },
 ]
 
 [[package]]
