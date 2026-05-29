@@ -1,0 +1,3 @@
+
+
+The animated short film depicts a young boy with red hair and a dark cloak in a snowy, mountainous landscape. The visual style is dark and atmospheric, emphasizing the harsh environment and the intense confrontation between the boy and a mysterious figure. Key scenes include the boy standing amidst snow-covered rocks, the figure leaping towards him with a weapon, and the boy being knocked down with blood visible. The storyline revolves around a struggle for survival in a hostile setting, with the boy facing a threatening figure in a tense and dramatic encounter.
