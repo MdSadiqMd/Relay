@@ -21,8 +21,14 @@ def compute_leaf(
     valid_from: str,
     valid_to: Optional[str],
     supersedes: list[str],
+    video_embedding_hash: Optional[str] = None,
 ) -> bytes:
-    """Compute a Merkle leaf hash for a single document."""
+    """Compute a Merkle leaf hash for a single document.
+
+    If ``video_embedding_hash`` is provided, it is included in the leaf payload.
+    When absent, the leaf hash remains identical to the pre-video behaviour for
+    backward compatibility.
+    """
     parts = [
         doc_id,
         content_hash,
@@ -32,6 +38,8 @@ def compute_leaf(
         valid_to or "",
         ",".join(sorted(supersedes or [])),  # sorted for determinism
     ]
+    if video_embedding_hash is not None:
+        parts.append(video_embedding_hash)
     payload = "||".join(parts).encode("utf-8")
     return hashlib.sha256(payload).digest()
 

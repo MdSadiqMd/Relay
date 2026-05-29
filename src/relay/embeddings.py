@@ -61,6 +61,15 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def video_embedding_hash(vector: list[float]) -> str:
+    """Compute SHA256 hash of a video embedding vector.
+
+    Same deterministic IEEE 754 serialization as :func:`embedding_hash`.
+    """
+    raw = b"".join(struct.pack("!d", v) for v in vector)
+    return hashlib.sha256(raw).hexdigest()
+
+
 def embedding_hash(vector: list[float]) -> str:
     """Compute SHA256 hash of an embedding vector.
 
