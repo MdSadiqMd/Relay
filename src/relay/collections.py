@@ -22,8 +22,9 @@ from relay.config import CONFIG
 # Module-level client singleton
 _client: Optional[QdrantClient] = None
 
-# Cache for collection_has_sparse() — collection schema never changes at runtime
+# Cache for collection_has_sparse() / collection_has_video() — schema never changes
 _has_sparse_cache: dict[str, bool] = {}
+_has_video_cache: dict[str, bool] = {}
 
 
 def get_client() -> QdrantClient:
@@ -66,6 +67,29 @@ def collection_has_sparse(client: QdrantClient, collection_name: str) -> bool:
     return result
 
 
+def collection_has_video(client: QdrantClient, collection_name: str) -> bool:
+    """Return True if the collection has a 'video' named vector configured.
+
+    Result is cached — collection schema never changes at runtime.
+    """
+    if collection_name in _has_video_cache:
+        return _has_video_cache[collection_name]
+
+    try:
+        info = client.get_collection(collection_name)
+        vectors = getattr(info.config.params, "vectors", None) or {}
+        result = isinstance(vectors, dict) and "video" in vectors
+    except Exception:
+        result = False
+
+    _has_video_cache[collection_name] = result
+    return result
+
+
+def invalidate_has_video_cache(collection_name: str) -> None:
+    _has_video_cache.pop(collection_name, None)
+
+
 def invalidate_has_sparse_cache(collection_name: str) -> None:
     """Invalidate the sparse cache entry for a collection.
 
@@ -84,6 +108,16 @@ def ensure_collections() -> QdrantClient:
                 "semantic": VectorParams(
                     size=CONFIG.semantic_dim,
                     distance=Distance.COSINE,
+                ),
+                **(
+                    {
+                        "video": VectorParams(
+                            size=CONFIG.video_dim,
+                            distance=Distance.COSINE,
+                        )
+                    }
+                    if CONFIG.video_dim > 0
+                    else {}
                 ),
             },
             sparse_vectors_config={

@@ -42,5 +42,11 @@ class RelayConfig(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
 
+    # TwelveLabs
+    twelve_labs_api_key: str = ""
+    twelve_labs_model: str = "pegasus1.5"
+    twelve_labs_embed_model: str = "marengo3.0"
+    video_dim: int = 1024
+
 
 CONFIG = RelayConfig()
