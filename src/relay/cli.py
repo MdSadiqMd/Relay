@@ -27,6 +27,9 @@ app = typer.Typer(
 epoch_app = typer.Typer(help="Epoch management commands")
 app.add_typer(epoch_app, name="epoch")
 
+video_app = typer.Typer(help="TwelveLabs video analysis and ingestion")
+app.add_typer(video_app, name="video")
+
 console = Console()
 
 
@@ -125,7 +128,9 @@ def query(
     ),
     epoch: Optional[int] = typer.Option(None, "--epoch", help="Pin to specific epoch"),
     retrieval_policy: str = typer.Option(
-        "dense", "--retrieval-policy", help="Retrieval policy: dense | hybrid"
+        "dense",
+        "--retrieval-policy",
+        help="Retrieval policy: dense | hybrid | multimodal",
     ),
     top_k: int = typer.Option(5, "--top-k", "-k", help="Number of results"),
     output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
@@ -378,6 +383,169 @@ def epoch_status(
             )
 
         console.print(table)
+
+
+@video_app.command("ingest")
+def video_ingest(
+    url: str = typer.Option(..., "--url", help="Publicly accessible video URL"),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+    valid_from: str = typer.Option(
+        ..., "--valid-from", help="Validity start date (YYYY-MM-DD)"
+    ),
+    valid_to: Optional[str] = typer.Option(
+        None, "--valid-to", help="Validity end date"
+    ),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt", help="Pegasus analysis prompt"
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="Pegasus model version (default: pegasus1.5)"
+    ),
+    tags: Optional[str] = typer.Option(
+        None, "--tags", help="Comma-separated semantic tags"
+    ),
+):
+    """Analyze a video with TwelveLabs Pegasus and ingest into relay."""
+    from pkg.twelvelabs import ingest_video_url
+
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    with console.status("[bold green]Analyzing video and ingesting..."):
+        result = ingest_video_url(
+            video_url=url,
+            tenant_id=tenant,
+            valid_from=valid_from,
+            valid_to=valid_to,
+            prompt=prompt,
+            model_name=model,
+            semantic_tags=tag_list,
+        )
+
+    preview = result.source_file[:48]
+    panel = Panel(
+        f"[bold green]✓ Video ingested[/]\n\n"
+        f"  [cyan]doc_id[/]:        {result.doc_id}\n"
+        f"  [cyan]epoch_id[/]:      {result.epoch_id}\n"
+        f"  [cyan]content_hash[/]:  {result.content_hash[:16]}...\n"
+        f"  [cyan]embed_hash[/]:    {result.embedding_hash[:16]}...\n"
+        f"  [cyan]merkle_root[/]:   {result.merkle_root[:16]}...\n"
+        f"  [cyan]source[/]:        {preview}",
+        title="[bold]relay video ingest[/]",
+        border_style="green",
+    )
+    console.print(panel)
+
+
+@video_app.command("analyze")
+def video_analyze(
+    url: str = typer.Option(..., "--url", help="Publicly accessible video URL"),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt", help="Pegasus analysis prompt"
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="Pegasus model version (default: pegasus1.5)"
+    ),
+    stream: bool = typer.Option(
+        False, "--stream", help="Stream text fragments in real-time"
+    ),
+    max_tokens: Optional[int] = typer.Option(
+        None, "--max-tokens", help="Maximum tokens to generate"
+    ),
+    start_time: Optional[float] = typer.Option(
+        None, "--start-time", help="Start of analysis window (seconds, pegasus1.5)"
+    ),
+    end_time: Optional[float] = typer.Option(
+        None, "--end-time", help="End of analysis window (seconds, pegasus1.5)"
+    ),
+):
+    """Analyze a video with TwelveLabs Pegasus (no ingestion)."""
+    console.print("\n[bold blue]relay video analyze[/]")
+    console.print(f"  [cyan]url[/]: {url}")
+
+    if stream:
+        from pkg.twelvelabs.client import analyze_video_stream
+
+        console.print("\n  [bold]Streaming transcript:[/]\n")
+        for chunk in analyze_video_stream(
+            video_url=url,
+            prompt=prompt,
+            model_name=model,
+            max_tokens=max_tokens,
+            start_time=start_time,
+            end_time=end_time,
+        ):
+            console.print(chunk, end="")
+        console.print()
+    else:
+        from pkg.twelvelabs.client import analyze_video
+
+        with console.status("[bold blue]Analyzing video..."):
+            transcript = analyze_video(
+                video_url=url,
+                prompt=prompt,
+                model_name=model,
+                max_tokens=max_tokens,
+                start_time=start_time,
+                end_time=end_time,
+            )
+        console.print("\n  [bold]Transcript:[/]\n")
+        console.print(Panel(transcript, border_style="blue"))
+
+
+@video_app.command("segment")
+def video_segment(
+    url: str = typer.Option(..., "--url", help="Publicly accessible video URL"),
+    tenant: str = typer.Option(
+        CONFIG.default_tenant, "--tenant", "-t", help="Tenant ID"
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="Pegasus model version (default: pegasus1.5)"
+    ),
+    tags: Optional[str] = typer.Option(
+        None, "--tags", help="Comma-separated semantic tags"
+    ),
+):
+    """Analyze video segments with Pegasus and ingest each as a relay document."""
+    from pkg.twelvelabs.segments import ingest_video_segments
+
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    with console.status("[bold green]Segmenting video and ingesting..."):
+        results = ingest_video_segments(
+            video_url=url,
+            tenant_id=tenant,
+            model_name=model,
+            semantic_tags=tag_list,
+        )
+
+    console.print(f"\n[bold green]✓ {len(results)} segments ingested[/]\n")
+    for r in results:
+        console.print(
+            f"  [cyan]{r.doc_id}[/]  (epoch {r.epoch_id}, root {r.merkle_root[:16]}...)"
+        )
+    console.print()
+
+
+@video_app.command("upload")
+def video_upload(
+    url: str = typer.Option(..., "--url", help="Publicly accessible video URL"),
+):
+    """Upload a video as a reusable TwelveLabs asset."""
+    from pkg.twelvelabs.client import upload_asset
+
+    with console.status("[bold green]Uploading video asset..."):
+        asset_id = upload_asset(video_url=url)
+
+    panel = Panel(
+        f"[bold green]✓ Asset uploaded[/]\n\n"
+        f"  [cyan]asset_id[/]:  {asset_id}\n"
+        f"  [cyan]url[/]:       {url[:60]}",
+        title="[bold]relay video upload[/]",
+        border_style="green",
+    )
+    console.print(panel)
 
 
 def main():

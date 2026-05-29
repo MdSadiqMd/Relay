@@ -22,7 +22,11 @@ from qdrant_client.models import (
     SparseVector,
 )
 
-from relay.collections import collection_has_sparse, ensure_collections
+from relay.collections import (
+    collection_has_sparse,
+    collection_has_video,
+    ensure_collections,
+)
 from relay.config import CONFIG
 from relay.embeddings import embed, sparse_embed
 from relay.epochs import get_current_epoch_id, get_epoch, resolve_epoch_at
@@ -80,7 +84,38 @@ def query(
     except ValueError:
         policy = RetrievalPolicy.DENSE
 
-    if policy == RetrievalPolicy.HYBRID:
+    if policy == RetrievalPolicy.MULTIMODAL:
+        if not collection_has_video(client, CONFIG.documents_collection):
+            raise ValueError(
+                "Multimodal retrieval requires a collection with a 'video' "
+                "named vector. Recreate the collection so documents are "
+                "ingested with both semantic and video vectors."
+            )
+        from pkg.twelvelabs.embed import compute_text_query_embedding
+
+        dense_vector = embed(text)
+        video_query_vector = compute_text_query_embedding(text)
+        results = client.query_points(
+            collection_name=CONFIG.documents_collection,
+            prefetch=[
+                Prefetch(
+                    query=dense_vector,
+                    using="semantic",
+                    filter=qdrant_filter,
+                    limit=top_k * 3,
+                ),
+                Prefetch(
+                    query=video_query_vector,
+                    using="video",
+                    filter=qdrant_filter,
+                    limit=top_k * 3,
+                ),
+            ],
+            query=FusionQuery(fusion=Fusion.RRF),
+            limit=top_k * 3,
+            with_payload=True,
+        )
+    elif policy == RetrievalPolicy.HYBRID:
         if not collection_has_sparse(client, CONFIG.documents_collection):
             raise ValueError(
                 "Hybrid retrieval requires a collection with sparse vectors. "
