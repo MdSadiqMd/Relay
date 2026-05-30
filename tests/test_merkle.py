@@ -32,6 +32,57 @@ class TestComputeLeaf:
         assert isinstance(leaf, bytes)
         assert len(leaf) == 32  # SHA256 digest
 
+    def test_video_embedding_hash_affects_leaf(self):
+        a = compute_leaf("d1", "ch", "eh", "v1", "2024-01-01", None, None)
+        b = compute_leaf(
+            "d1",
+            "ch",
+            "eh",
+            "v1",
+            "2024-01-01",
+            None,
+            None,
+            video_embedding_hash="abc123",
+        )
+        assert a != b
+
+    def test_video_embedding_hash_deterministic(self):
+        a = compute_leaf(
+            "d1",
+            "ch",
+            "eh",
+            "v1",
+            "2024-01-01",
+            None,
+            None,
+            video_embedding_hash="abc123",
+        )
+        b = compute_leaf(
+            "d1",
+            "ch",
+            "eh",
+            "v1",
+            "2024-01-01",
+            None,
+            None,
+            video_embedding_hash="abc123",
+        )
+        assert a == b
+
+    def test_video_embedding_hash_backward_compat(self):
+        a = compute_leaf("d1", "ch", "eh", "v1", "2024-01-01", None, None)
+        b = compute_leaf(
+            "d1",
+            "ch",
+            "eh",
+            "v1",
+            "2024-01-01",
+            None,
+            None,
+            video_embedding_hash=None,
+        )
+        assert a == b
+
 
 class TestComputeMerkleRoot:
     def test_empty_leaves(self):

@@ -22,6 +22,40 @@ class TestContentHash:
         assert len(h) == 64
 
 
+class TestVideoEmbeddingHash:
+    def test_deterministic(self):
+        from relay.embeddings import video_embedding_hash
+
+        vec = [0.1] * 1024
+        assert video_embedding_hash(vec) == video_embedding_hash(vec)
+
+    def test_different_vectors(self):
+        from relay.embeddings import video_embedding_hash
+
+        assert video_embedding_hash([0.1] * 1024) != video_embedding_hash([0.2] * 1024)
+
+    def test_order_matters(self):
+        from relay.embeddings import video_embedding_hash
+
+        v1 = [0.1, 0.2] + [0.0] * 1022
+        v2 = [0.2, 0.1] + [0.0] * 1022
+        assert video_embedding_hash(v1) != video_embedding_hash(v2)
+
+    def test_returns_hex(self):
+        from relay.embeddings import video_embedding_hash
+
+        h = video_embedding_hash([0.5] * 1024)
+        assert isinstance(h, str)
+        assert len(h) == 64
+        int(h, 16)
+
+    def test_same_as_embedding_hash_for_same_input(self):
+        from relay.embeddings import embedding_hash, video_embedding_hash
+
+        vec = [0.3, 0.7, 0.1]
+        assert video_embedding_hash(vec) == embedding_hash(vec)
+
+
 class TestEmbeddingHash:
     def test_deterministic(self):
         vec = [0.1, 0.2, 0.3]
