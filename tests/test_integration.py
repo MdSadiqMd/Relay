@@ -254,6 +254,78 @@ class TestHybridRetrieval:
         assert result.result_count > 0
 
 
+class TestVideoCollection:
+    """collection_has_video() and related cache tests."""
+
+    def test_collection_has_video_false_for_semantic_only(self, client):
+        """Existing relay_documents (no video vector) returns False."""
+        from relay.collections import collection_has_video
+
+        assert collection_has_video(client, CONFIG.documents_collection) is False
+
+    def test_collection_has_video_true(self, client):
+        """A collection created with a 'video' named vector returns True."""
+        from relay.collections import collection_has_video, invalidate_has_video_cache
+
+        tmp = f"relay_test_video_{uuid.uuid4().hex[:8]}"
+        client.create_collection(
+            collection_name=tmp,
+            vectors_config={
+                "semantic": VectorParams(size=384, distance=Distance.COSINE),
+                "video": VectorParams(size=1024, distance=Distance.COSINE),
+            },
+        )
+        try:
+            invalidate_has_video_cache(tmp)
+            assert collection_has_video(client, tmp) is True
+        finally:
+            client.delete_collection(tmp)
+
+    def test_collection_has_video_cache_hit(self, client):
+        from relay.collections import _has_video_cache, collection_has_video
+
+        _has_video_cache.clear()
+        assert CONFIG.documents_collection not in _has_video_cache
+        result = collection_has_video(client, CONFIG.documents_collection)
+        assert result is False  # existing test collection has no video vector
+        assert CONFIG.documents_collection in _has_video_cache
+
+    def test_multimodal_raises_on_no_video_collection(self, client, monkeypatch):
+        """Multimodal policy raises on a collection without video vector."""
+        from relay.query import query as do_query
+        from relay.collections import invalidate_has_video_cache
+
+        tmp = f"relay_test_no_video_{uuid.uuid4().hex[:8]}"
+        client.create_collection(
+            collection_name=tmp,
+            vectors_config={
+                "semantic": VectorParams(size=384, distance=Distance.COSINE)
+            },
+        )
+        monkeypatch.setattr(CONFIG, "documents_collection", tmp)
+        invalidate_has_video_cache(tmp)
+        try:
+            with pytest.raises(ValueError, match="Multimodal retrieval requires"):
+                do_query(
+                    text="test", tenant_id=TEST_TENANT, retrieval_policy="multimodal"
+                )
+        finally:
+            client.delete_collection(tmp)
+
+    def test_invalidate_has_video_cache_clears_entry(self, client):
+        from relay.collections import (
+            _has_video_cache,
+            collection_has_video,
+            invalidate_has_video_cache,
+        )
+
+        _has_video_cache.clear()
+        collection_has_video(client, CONFIG.documents_collection)
+        assert CONFIG.documents_collection in _has_video_cache
+        invalidate_has_video_cache(CONFIG.documents_collection)
+        assert CONFIG.documents_collection not in _has_video_cache
+
+
 class TestSupersedePipeline:
     """Phase 3: Supersede kafka → nats."""
 
