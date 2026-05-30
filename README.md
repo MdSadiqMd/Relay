@@ -3,6 +3,8 @@
 
 Relay is a temporal semantic memory system that transforms vector retrieval from a mutable, stateless semantic cache into a versioned, reproducible semantic memory infrastructure with full multimodal video understanding via TwelveLabs and LlamaIndex-powered RAG.
 
+See [`math.md`](docs/math.md) for formal definitions of all algorithms used in this project.
+
 ## Architecture
 
 ### High Level Design
